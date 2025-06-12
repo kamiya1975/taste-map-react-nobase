@@ -1,11 +1,12 @@
 // src/MapPage.js
 import React, { useState, useEffect } from 'react';
 import Plot from 'react-plotly.js';
+import { Html5QrcodeScanner } from 'html5-qrcode';
 
 function MapPage() {
   const [data, setData] = useState([]);
   const [userRatings, setUserRatings] = useState({});
-  const [zoomLevel, setZoomLevel] = useState(2.0); // ✅ 初期ズーム倍率を強めに設定
+  const [zoomLevel, setZoomLevel] = useState(2.0);
   const [target, setTarget] = useState({ x: 0, y: 0 });
   const zoomFactor = 1 / zoomLevel;
 
@@ -42,7 +43,10 @@ function MapPage() {
       const pcaData = parseCSV(pcaText);
       const metaData = parseCSV(metaText);
       const metaMap = Object.fromEntries(metaData.map(d => [String(d.JAN), d]));
-      const merged = pcaData.map(d => ({ ...d, 希望小売価格: metaMap[String(d.JAN)]?.希望小売価格 || null }));
+      const merged = pcaData.map(d => ({
+        ...d,
+        希望小売価格: metaMap[String(d.JAN)]?.希望小売価格 || null
+      }));
       setData(merged);
     });
   }, []);
@@ -98,6 +102,24 @@ function MapPage() {
     }
   };
 
+  const handleScan = () => {
+    const scanner = new Html5QrcodeScanner("reader", { fps: 10, qrbox: 250 }, false);
+    scanner.render(
+      (decodedText) => {
+        const match = data.find(d => String(d.JAN).trim() === decodedText.trim());
+        if (match) {
+          setTarget({ x: match.BodyAxis, y: match.SweetAxis });
+        } else {
+          alert(`「${decodedText}」に該当するワインが見つかりません`);
+        }
+        scanner.clear();
+      },
+      (error) => {
+        console.warn("読み取りエラー:", error);
+      }
+    );
+  };
+
   return (
     <div style={{ padding: '10px' }}>
       <h2>SAKELAVO</h2>
@@ -105,7 +127,10 @@ function MapPage() {
       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginBottom: '10px' }}>
         <button onClick={() => setZoomLevel(prev => Math.min(prev + 1.0, 10))}>＋</button>
         <button onClick={() => setZoomLevel(prev => Math.max(prev - 1.0, 0.2))}>−</button>
+        <button onClick={handleScan}>📷 JANスキャン</button>
       </div>
+
+      <div id="reader" style={{ width: '100%', marginBottom: '10px' }}></div>
 
       <div className="plot-container">
         <Plot
