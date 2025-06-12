@@ -55,7 +55,7 @@ function MapPage() {
   }, [sliderPc1, sliderPc2]);
 
   const handleScanSuccess = (result) => {
-    const jan = result.replace(/[^0-9]/g, ''); // 数字のみに整形
+    const jan = result.replace(/[^0-9]/g, '');
     const match = data.find(d => String(d.JAN).replace(/[^0-9]/g, '') === jan);
     if (match && !isNaN(match.BodyAxis) && !isNaN(match.SweetAxis)) {
       setTarget({ x: match.BodyAxis, y: match.SweetAxis });
@@ -136,8 +136,8 @@ function MapPage() {
           }
         ]}
         layout={{
-          xaxis: { showticklabels: false, zeroline: false },
-          yaxis: { showticklabels: false, zeroline: false },
+          xaxis: { range: [-7.5, 12.5], showticklabels: false, zeroline: false },
+          yaxis: { range: [-7.5, 12.5], showticklabels: false, zeroline: false },
           margin: { l: 30, r: 30, t: 30, b: 30 },
           dragmode: 'pan',
           showlegend: true
@@ -147,14 +147,14 @@ function MapPage() {
 
       <h3>あなたの好みに寄り添うワイン</h3>
       {distances.map((item, index) => (
-        <div key={item.JAN} style={{ marginBottom: '8px' }}>
-          <strong>
+        <div key={item.JAN} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px', flexWrap: 'wrap' }}>
+          <strong style={{ width: '65%' }}>
             {index + 1}. {item.商品名} ({item.Type}) {item.希望小売価格 ? `${item.希望小売価格.toLocaleString()} 円` : '価格未設定'}
           </strong>
           <select
             value={userRatings[item.JAN] || 0}
             onChange={(e) => handleRatingChange(item.JAN, parseInt(e.target.value))}
-            style={{ marginLeft: '10px' }}
+            style={{ width: '30%', minWidth: '90px' }}
           >
             {ratingOptions.map((label, idx) => (
               <option key={idx} value={idx}>{label}</option>

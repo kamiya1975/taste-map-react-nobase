@@ -10,14 +10,14 @@ const QrScanner = ({ onScanSuccess, onClose }) => {
       { facingMode: "environment" },
       { fps: 10, qrbox: { width: 250, height: 250 } },
       (decodedText) => {
-        onScanSuccess(decodedText);
-        scanner.stop().then(() => {
-          if (onClose) onClose();
-        });
+        if (decodedText) {
+          onScanSuccess(decodedText.trim());
+          scanner.stop().then(() => {
+            if (onClose) onClose();
+          });
+        }
       },
-      () => {
-        // 無視：失敗時何もしない
-      }
+      () => {}
     );
 
     return () => {
@@ -32,4 +32,4 @@ const QrScanner = ({ onScanSuccess, onClose }) => {
   );
 };
 
-export default QrScanner;
+export default QrScanner
