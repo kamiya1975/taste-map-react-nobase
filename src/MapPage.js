@@ -1,7 +1,6 @@
-// src/MapPage.js
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import Plot from 'react-plotly.js';
-import QrReader from 'react-qr-reader';
+import QrScanner from './QrScanner';
 
 function MapPage() {
   const [data, setData] = useState([]);
@@ -56,6 +55,19 @@ function MapPage() {
     setTarget({ x, y });
   }, [sliderPc1, sliderPc2]);
 
+  const handleScanSuccess = (result) => {
+    const jan = result.trim();
+    const match = data.find(d => String(d.JAN).trim() === jan);
+    if (match) {
+      setTarget({ x: match.BodyAxis, y: match.SweetAxis });
+      setSliderPc1((match.BodyAxis + 7.5) * (100 / 20));
+      setSliderPc2((match.SweetAxis + 7.5) * (100 / 20));
+    } else {
+      alert(`「${jan}」に該当するワインが見つかりません`);
+    }
+    setScanning(false);
+  };
+
   const ratingOptions = ["未評価", "★", "★★", "★★★", "★★★★", "★★★★★"];
   const handleRatingChange = (jan, rating) => {
     setUserRatings(prev => ({ ...prev, [jan]: rating }));
@@ -87,26 +99,7 @@ function MapPage() {
       </div>
 
       {scanning && (
-        <div style={{ maxWidth: '400px', marginBottom: '10px' }}>
-          <QrReader
-            delay={300}
-            onError={() => alert("カメラアクセスに失敗しました")}
-            onScan={(result) => {
-              if (result) {
-                const match = data.find(d => String(d.JAN).trim() === result.trim());
-                if (match) {
-                  setTarget({ x: match.BodyAxis, y: match.SweetAxis });
-                  setSliderPc1((match.BodyAxis + 7.5) * (100 / 20));
-                  setSliderPc2((match.SweetAxis + 7.5) * (100 / 20));
-                } else {
-                  alert(`「${result}」に該当するワインが見つかりません`);
-                }
-                setScanning(false);
-              }
-            }}
-            style={{ width: '100%' }}
-          />
-        </div>
+        <QrScanner onScanSuccess={handleScanSuccess} onClose={() => setScanning(false)} />
       )}
 
       <label>コク（軽やか〜濃厚）</label>
