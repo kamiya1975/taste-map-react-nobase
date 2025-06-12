@@ -56,9 +56,10 @@ function MapPage() {
   }, [sliderPc1, sliderPc2]);
 
   const handleScanSuccess = (result) => {
-    const jan = result.trim();
-    const match = data.find(d => String(d.JAN).trim() === jan);
-    if (match) {
+    const jan = result.replace(/[^0-9]/g, '').trim(); // 正規化（数字のみ）
+    const match = data.find(d => String(d.JAN).replace(/[^0-9]/g, '') === jan);
+
+    if (match && !isNaN(match.BodyAxis) && !isNaN(match.SweetAxis)) {
       setTarget({ x: match.BodyAxis, y: match.SweetAxis });
       setSliderPc1((match.BodyAxis + 7.5) * (100 / 20));
       setSliderPc2((match.SweetAxis + 7.5) * (100 / 20));
@@ -75,10 +76,6 @@ function MapPage() {
 
   const xValues = data.map(d => d.BodyAxis);
   const yValues = data.map(d => d.SweetAxis);
-  const x_min = Math.min(...xValues);
-  const x_max = Math.max(...xValues);
-  const y_min = Math.min(...yValues);
-  const y_max = Math.max(...yValues);
 
   const distances = data.map(d => {
     const dx = d.BodyAxis - target.x;
@@ -92,6 +89,7 @@ function MapPage() {
   return (
     <div style={{ padding: '10px' }}>
       <h2>SAKELAVO</h2>
+
       <div style={{ display: 'flex', gap: '10px', marginBottom: '10px' }}>
         <button onClick={() => setZoomLevel(prev => Math.min(prev + 1.0, 10))}>＋</button>
         <button onClick={() => setZoomLevel(prev => Math.max(prev - 1.0, 0.2))}>−</button>
@@ -99,7 +97,10 @@ function MapPage() {
       </div>
 
       {scanning && (
-        <QrScanner onScanSuccess={handleScanSuccess} onClose={() => setScanning(false)} />
+        <QrScanner
+          onScanSuccess={handleScanSuccess}
+          onClose={() => setScanning(false)}
+        />
       )}
 
       <label>コク（軽やか〜濃厚）</label>
@@ -133,8 +134,8 @@ function MapPage() {
             text: distances.map((_, i) => '❶❷❸❹❺❻❼❽❾❿'[i] || `${i + 1}`),
             mode: 'markers+text',
             type: 'scatter',
-            marker: { size: 10, color: 'white' },
-            textfont: { color: 'black', size: 12 },
+            marker: { size: 10, color: 'black' },
+            textfont: { color: 'white', size: 12 },
             textposition: 'middle center',
             name: 'TOP10',
             hoverinfo: 'text',
@@ -152,9 +153,15 @@ function MapPage() {
 
       <h3>あなたの好みに寄り添うワイン</h3>
       {distances.map((item, index) => (
-        <div key={item.JAN}>
-          <strong>{index + 1}. {item.商品名} ({item.Type}) {item.希望小売価格 ? `${item.希望小売価格.toLocaleString()} 円` : '価格未設定'}</strong>
-          <select value={userRatings[item.JAN] || 0} onChange={(e) => handleRatingChange(item.JAN, parseInt(e.target.value))}>
+        <div key={item.JAN} style={{ marginBottom: '8px' }}>
+          <strong>
+            {index + 1}. {item.商品名} ({item.Type}) {item.希望小売価格 ? `${item.希望小売価格.toLocaleString()} 円` : '価格未設定'}
+          </strong>
+          <select
+            value={userRatings[item.JAN] || 0}
+            onChange={(e) => handleRatingChange(item.JAN, parseInt(e.target.value))}
+            style={{ minWidth: '90px', marginLeft: '10px' }}
+          >
             {ratingOptions.map((label, idx) => (
               <option key={idx} value={idx}>{label}</option>
             ))}
