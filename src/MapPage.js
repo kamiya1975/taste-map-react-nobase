@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import Plot from 'react-plotly.js';
-import QrReader from 'react-qr-reader';
+import QrScanner from './QrScanner';
 
 function MapPage() {
   const [data, setData] = useState([]);
@@ -10,7 +10,6 @@ function MapPage() {
   const [sliderPc1, setSliderPc1] = useState(50);
   const [sliderPc2, setSliderPc2] = useState(50);
   const [scanning, setScanning] = useState(false);
-  const [scanned, setScanned] = useState(false);
 
   useEffect(() => {
     const handleResize = () => window.dispatchEvent(new Event('resize'));
@@ -59,20 +58,15 @@ function MapPage() {
     setUserRatings(prev => ({ ...prev, [jan]: rating }));
   };
 
-  const handleScan = (result) => {
-    if (result && !scanned) {
-      setScanned(true); // 1回だけ読み取り
-      const jan = result.trim();
-      const match = data.find(d => String(d.JAN).trim() === jan);
-      if (match && !isNaN(match.BodyAxis) && !isNaN(match.SweetAxis)) {
-        setTarget({ x: match.BodyAxis, y: match.SweetAxis });
-        setSliderPc1((match.BodyAxis + 7.5) * (100 / 20));
-        setSliderPc2((match.SweetAxis + 7.5) * (100 / 20));
-      } else {
-        alert(`「${jan}」に該当するワインが見つかりません`);
-      }
-      setScanning(false); // カメラを閉じる
-      setTimeout(() => setScanned(false), 1000); // フラグ初期化
+  const handleScanSuccess = (result) => {
+    const jan = result.replace(/[^0-9]/g, '');
+    const match = data.find(d => String(d.JAN).replace(/[^0-9]/g, '') === jan);
+    if (match && !isNaN(match.BodyAxis) && !isNaN(match.SweetAxis)) {
+      setTarget({ x: match.BodyAxis, y: match.SweetAxis });
+      setSliderPc1((match.BodyAxis + 7.5) * (100 / 20));
+      setSliderPc2((match.SweetAxis + 7.5) * (100 / 20));
+    } else {
+      alert(`「${jan}」に該当するワインが見つかりません`);
     }
   };
 
@@ -100,14 +94,10 @@ function MapPage() {
       </div>
 
       {scanning && (
-        <div style={{ maxWidth: '400px', marginBottom: '10px' }}>
-          <QrReader
-            delay={300}
-            onError={() => alert("カメラアクセスに失敗しました")}
-            onScan={handleScan}
-            style={{ width: '100%' }}
-          />
-        </div>
+        <QrScanner
+          onScanSuccess={handleScanSuccess}
+          onClose={() => setScanning(false)}
+        />
       )}
 
       <label>コク（軽やか〜濃厚）</label>
