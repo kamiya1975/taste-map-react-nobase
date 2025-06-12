@@ -54,12 +54,8 @@ function MapPage() {
     setTarget({ x, y });
   }, [sliderPc1, sliderPc2]);
 
-  const handleRatingChange = (jan, rating) => {
-    setUserRatings(prev => ({ ...prev, [jan]: rating }));
-  };
-
   const handleScanSuccess = (result) => {
-    const jan = result.replace(/[^0-9]/g, '');
+    const jan = result.replace(/[^0-9]/g, ''); // 数字のみに整形
     const match = data.find(d => String(d.JAN).replace(/[^0-9]/g, '') === jan);
     if (match && !isNaN(match.BodyAxis) && !isNaN(match.SweetAxis)) {
       setTarget({ x: match.BodyAxis, y: match.SweetAxis });
@@ -70,8 +66,9 @@ function MapPage() {
     }
   };
 
-  const xValues = data.map(d => d.BodyAxis);
-  const yValues = data.map(d => d.SweetAxis);
+  const handleRatingChange = (jan, rating) => {
+    setUserRatings(prev => ({ ...prev, [jan]: rating }));
+  };
 
   const distances = data.map(d => {
     const dx = d.BodyAxis - target.x;
@@ -88,8 +85,8 @@ function MapPage() {
       <h2>SAKELAVO</h2>
 
       <div style={{ display: 'flex', gap: '10px', marginBottom: '10px' }}>
-        <button onClick={() => setZoomLevel(prev => Math.min(prev + 1.0, 10))}>＋</button>
-        <button onClick={() => setZoomLevel(prev => Math.max(prev - 1.0, 0.2))}>−</button>
+        <button onClick={() => setZoomLevel(z => Math.min(z + 1, 10))}>＋</button>
+        <button onClick={() => setZoomLevel(z => Math.max(z - 1, 0.5))}>−</button>
         <button onClick={() => setScanning(true)}>📷 JANスキャン</button>
       </div>
 
@@ -101,10 +98,10 @@ function MapPage() {
       )}
 
       <label>コク（軽やか〜濃厚）</label>
-      <input type="range" min="0" max="100" value={sliderPc1} onChange={e => setSliderPc1(parseInt(e.target.value))} style={{ width: '100%' }} />
+      <input type="range" min="0" max="100" value={sliderPc1} onChange={e => setSliderPc1(+e.target.value)} style={{ width: '100%' }} />
 
       <label>甘さ（控えめ〜強め）</label>
-      <input type="range" min="0" max="100" value={sliderPc2} onChange={e => setSliderPc2(parseInt(e.target.value))} style={{ width: '100%' }} />
+      <input type="range" min="0" max="100" value={sliderPc2} onChange={e => setSliderPc2(+e.target.value)} style={{ width: '100%' }} />
 
       <Plot
         useResizeHandler
@@ -119,23 +116,23 @@ function MapPage() {
             name: type
           })),
           {
-            x: [target.x], y: [target.y],
+            x: [target.x],
+            y: [target.y],
             mode: 'markers',
             type: 'scatter',
             marker: { size: 20, color: 'green', symbol: 'x' },
-            name: 'あなたの好み',
+            name: 'あなたの好み'
           },
           {
             x: distances.map(d => d.BodyAxis),
             y: distances.map(d => d.SweetAxis),
-            text: distances.map((_, i) => '❶❷❸❹❺❻❼❽❾❿'[i] || `${i + 1}`),
+            text: distances.map((_, i) => '❶❷❸❹❺❻❼❽❾❿'[i] || (i + 1).toString()),
             mode: 'markers+text',
             type: 'scatter',
             marker: { size: 10, color: 'black' },
             textfont: { color: 'white', size: 12 },
             textposition: 'middle center',
-            name: 'TOP10',
-            hoverinfo: 'text',
+            name: 'TOP10'
           }
         ]}
         layout={{
@@ -157,7 +154,7 @@ function MapPage() {
           <select
             value={userRatings[item.JAN] || 0}
             onChange={(e) => handleRatingChange(item.JAN, parseInt(e.target.value))}
-            style={{ minWidth: '90px', marginLeft: '10px' }}
+            style={{ marginLeft: '10px' }}
           >
             {ratingOptions.map((label, idx) => (
               <option key={idx} value={idx}>{label}</option>

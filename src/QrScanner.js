@@ -16,7 +16,7 @@ const QrScanner = ({ onScanSuccess, onClose }) => {
         });
       },
       () => {
-        // 読み取り失敗時は無視
+        // 無視：失敗時何もしない
       }
     );
 
