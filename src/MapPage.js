@@ -1,15 +1,18 @@
 // src/MapPage.js
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Plot from 'react-plotly.js';
-import { Html5Qrcode } from 'html5-qrcode';
+import { BrowserMultiFormatReader } from '@zxing/browser';
 
 function MapPage() {
   const [data, setData] = useState([]);
   const [userRatings, setUserRatings] = useState({});
   const [zoomLevel, setZoomLevel] = useState(2.0);
   const [target, setTarget] = useState({ x: 0, y: 0 });
-  const [slider_pc1, setSliderPc1] = useState(50);
-  const [slider_pc2, setSliderPc2] = useState(50);
+  const [sliderPC1, setSliderPC1] = useState(50);
+  const [sliderPC2, setSliderPC2] = useState(50);
+  const [scanning, setScanning] = useState(false);
+  const codeReaderRef = useRef(null);
+  const videoRef = useRef(null);
   const zoomFactor = 1 / zoomLevel;
 
   useEffect(() => {
@@ -91,60 +94,86 @@ function MapPage() {
     target.x - ((x_max - x_min) / 2) * zoomFactor,
     target.x + ((x_max - x_min) / 2) * zoomFactor
   ];
-
   const y_range = [
     target.y - ((y_max - y_min) / 2) * zoomFactor,
     target.y + ((y_max - y_min) / 2) * zoomFactor
   ];
 
   const handlePlotClick = (event) => {
-    if (event && event.points && event.points.length > 0) {
+    if (event?.points?.length > 0) {
       const pt = event.points[0];
       setTarget({ x: pt.x, y: pt.y });
     }
   };
 
-  const handleScan = () => {
-    const scanner = new Html5Qrcode("reader");
-    scanner.start(
-      { facingMode: "environment" },
-      { fps: 10, qrbox: 250 },
-      (decodedText) => {
-        const match = data.find(d => String(d.JAN).trim() === decodedText.trim());
-        if (match) {
-          setTarget({ x: match.BodyAxis, y: match.SweetAxis });
-          const pc1Ratio = (match.BodyAxis - x_min) / (x_max - x_min);
-          const pc2Ratio = (match.SweetAxis - y_min) / (y_max - y_min);
-          setSliderPc1(Math.round(pc1Ratio * 100));
-          setSliderPc2(Math.round(pc2Ratio * 100));
+  const handleScan = async () => {
+    if (scanning) return;
+    setScanning(true);
+    const codeReader = new BrowserMultiFormatReader();
+    codeReaderRef.current = codeReader;
+
+    try {
+      const videoInputDevices = await BrowserMultiFormatReader.listVideoInputDevices();
+      const selectedDeviceId = videoInputDevices[0]?.deviceId;
+
+      codeReader.decodeOnceFromVideoDevice(selectedDeviceId, videoRef.current).then(result => {
+        const jan = result.getText().trim();
+        const found = data.find(d => String(d.JAN).trim() === jan);
+        if (found) {
+          setTarget({ x: found.BodyAxis, y: found.SweetAxis });
+
+          // 値の位置に合わせてスライダー初期値更新
+          const bodyRatio = (found.BodyAxis - x_min) / (x_max - x_min);
+          const sweetRatio = (found.SweetAxis - y_min) / (y_max - y_min);
+          setSliderPC1(Math.round(bodyRatio * 100));
+          setSliderPC2(Math.round(sweetRatio * 100));
         } else {
-          alert(`該当なし: ${decodedText}`);
+          alert(`「${jan}」に該当する商品が見つかりませんでした`);
         }
-        scanner.stop().then(() => {
-          document.getElementById("reader").innerHTML = "";
-        });
-      },
-      (error) => console.warn("読み取り失敗", error)
-    );
+        codeReader.reset();
+        setScanning(false);
+      });
+    } catch (err) {
+      console.error(err);
+      alert("カメラの使用ができませんでした");
+      setScanning(false);
+    }
   };
 
   return (
     <div style={{ padding: '10px' }}>
       <h2>SAKELAVO</h2>
 
-      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginBottom: '10px' }}>
+      <div style={{ display: 'flex', gap: '10px', marginBottom: '10px' }}>
         <button onClick={() => setZoomLevel(prev => Math.min(prev + 1.0, 10))}>＋</button>
         <button onClick={() => setZoomLevel(prev => Math.max(prev - 1.0, 0.2))}>−</button>
         <button onClick={handleScan}>📷 JANスキャン</button>
       </div>
 
-      <div id="reader" style={{ width: '100%', marginBottom: '10px' }}></div>
+      {scanning && (
+        <div style={{ width: '100%', maxWidth: '480px', marginBottom: '10px' }}>
+          <video ref={videoRef} style={{ width: '100%' }} />
+        </div>
+      )}
 
-      <div style={{ marginBottom: '10px' }}>
-        <div><strong>コク（軽やか～濃厚）</strong></div>
-        <input type="range" min="0" max="100" value={slider_pc1} onChange={(e) => setSliderPc1(Number(e.target.value))} />
-        <div><strong>甘さ（控えめ～強め）</strong></div>
-        <input type="range" min="0" max="100" value={slider_pc2} onChange={(e) => setSliderPc2(Number(e.target.value))} />
+      <div style={{ marginBottom: '20px' }}>
+        <label>コク（軽やか〜濃厚）</label>
+        <input type="range" min="0" max="100" value={sliderPC1} onChange={(e) => {
+          const val = Number(e.target.value);
+          setSliderPC1(val);
+          const x = x_min + (x_max - x_min) * (val / 100);
+          setTarget(prev => ({ ...prev, x }));
+        }} />
+      </div>
+
+      <div style={{ marginBottom: '20px' }}>
+        <label>甘さ（控えめ〜強め）</label>
+        <input type="range" min="0" max="100" value={sliderPC2} onChange={(e) => {
+          const val = Number(e.target.value);
+          setSliderPC2(val);
+          const y = y_min + (y_max - y_min) * (val / 100);
+          setTarget(prev => ({ ...prev, y }));
+        }} />
       </div>
 
       <div className="plot-container">
@@ -157,7 +186,7 @@ function MapPage() {
             ...typeList.map(type => ({
               x: data.filter(d => d.Type === type).map(d => d.BodyAxis),
               y: data.filter(d => d.Type === type).map(d => d.SweetAxis),
-              text: data.filter(d => d.Type === type).map(d => `${d["商品名"]}`),
+              text: data.filter(d => d.Type === type).map(d => d["商品名"]),
               hoverinfo: 'text+name',
               mode: 'markers',
               type: 'scatter',
