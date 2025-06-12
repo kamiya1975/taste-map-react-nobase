@@ -5,7 +5,7 @@ import Plot from 'react-plotly.js';
 function MapPage() {
   const [data, setData] = useState([]);
   const [userRatings, setUserRatings] = useState({});
-  const [zoomLevel, setZoomLevel] = useState(2.0);
+  const [zoomLevel, setZoomLevel] = useState(0.5); // ✅ 初期ズーム倍率を強めに設定
   const [target, setTarget] = useState({ x: 0, y: 0 });
   const zoomFactor = 1 / zoomLevel;
 
@@ -81,8 +81,15 @@ function MapPage() {
     );
   });
 
-  const x_range = [x_min, x_max];
-  const y_range = [y_min, y_max];
+  const x_range = [
+    target.x - ((x_max - x_min) / 2) * zoomFactor,
+    target.x + ((x_max - x_min) / 2) * zoomFactor
+  ];
+
+  const y_range = [
+    target.y - ((y_max - y_min) / 2) * zoomFactor,
+    target.y + ((y_max - y_min) / 2) * zoomFactor
+  ];
 
   const handlePlotClick = (event) => {
     if (event && event.points && event.points.length > 0) {
