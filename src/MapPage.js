@@ -1,7 +1,5 @@
-// src/MapPage.js
 import React, { useState, useEffect } from 'react';
 import Plot from 'react-plotly.js';
-import { Html5QrcodeScanner } from 'html5-qrcode';
 
 function MapPage() {
   const [data, setData] = useState([]);
@@ -102,22 +100,25 @@ function MapPage() {
     }
   };
 
-  const handleScan = () => {
-    const scanner = new Html5QrcodeScanner("reader", { fps: 10, qrbox: 250 }, false);
-    scanner.render(
-      (decodedText) => {
-        const match = data.find(d => String(d.JAN).trim() === decodedText.trim());
-        if (match) {
-          setTarget({ x: match.BodyAxis, y: match.SweetAxis });
-        } else {
-          alert(`「${decodedText}」に該当するワインが見つかりません`);
+  const handleScan = async () => {
+    if (typeof window !== 'undefined') {
+      const { Html5QrcodeScanner } = await import('html5-qrcode');
+      const scanner = new Html5QrcodeScanner("reader", { fps: 10, qrbox: 250 }, false);
+      scanner.render(
+        (decodedText) => {
+          const match = data.find(d => String(d.JAN).trim() === decodedText.trim());
+          if (match) {
+            setTarget({ x: match.BodyAxis, y: match.SweetAxis });
+          } else {
+            alert(`「${decodedText}」に該当するワインが見つかりません`);
+          }
+          scanner.clear();
+        },
+        (error) => {
+          console.warn("読み取りエラー:", error);
         }
-        scanner.clear();
-      },
-      (error) => {
-        console.warn("読み取りエラー:", error);
-      }
-    );
+      );
+    }
   };
 
   return (
