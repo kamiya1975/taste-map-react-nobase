@@ -5,7 +5,7 @@ import Plot from 'react-plotly.js';
 function MapPage() {
   const [data, setData] = useState([]);
   const [userRatings, setUserRatings] = useState({});
-  const [zoomLevel, setZoomLevel] = useState(0.5); // ✅ 初期ズーム倍率を強めに設定
+  const [zoomLevel, setZoomLevel] = useState(5.0); // ✅ 初期ズーム倍率を強めに設定
   const [target, setTarget] = useState({ x: 0, y: 0 });
   const zoomFactor = 1 / zoomLevel;
 
