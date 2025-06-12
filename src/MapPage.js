@@ -1,13 +1,16 @@
+// src/MapPage.js
 import React, { useState, useEffect } from 'react';
 import Plot from 'react-plotly.js';
-import { BrowserMultiFormatReader } from '@zxing/browser';
+import QrReader from 'react-qr-reader';
 
 function MapPage() {
   const [data, setData] = useState([]);
   const [userRatings, setUserRatings] = useState({});
   const [zoomLevel, setZoomLevel] = useState(2.0);
   const [target, setTarget] = useState({ x: 0, y: 0 });
-
+  const [sliderPc1, setSliderPc1] = useState(50);
+  const [sliderPc2, setSliderPc2] = useState(50);
+  const [scanning, setScanning] = useState(false);
   const zoomFactor = 1 / zoomLevel;
 
   useEffect(() => {
@@ -39,14 +42,21 @@ function MapPage() {
       const metaMap = Object.fromEntries(metaData.map(d => [String(d.JAN), d]));
       const merged = pcaData.map(d => ({
         ...d,
-        希望小売価格: metaMap[String(d.JAN)]?.希望小売価格 || null
+        商品名: metaMap[String(d.JAN)]?.商品名 || '',
+        Type: metaMap[String(d.JAN)]?.Type || '',
+        希望小売価格: metaMap[String(d.JAN)]?.希望小売価格 || null,
       }));
       setData(merged);
     });
   }, []);
 
-  const ratingOptions = ["未評価", "★", "★★", "★★★", "★★★★", "★★★★★"];
+  useEffect(() => {
+    const x = (sliderPc1 / 100) * 20 - 7.5;
+    const y = (sliderPc2 / 100) * 20 - 7.5;
+    setTarget({ x, y });
+  }, [sliderPc1, sliderPc2]);
 
+  const ratingOptions = ["未評価", "★", "★★", "★★★", "★★★★", "★★★★★"];
   const handleRatingChange = (jan, rating) => {
     setUserRatings(prev => ({ ...prev, [jan]: rating }));
   };
@@ -67,143 +77,96 @@ function MapPage() {
   const typeColor = { Spa: 'blue', White: 'gold', Red: 'red', Rose: 'pink' };
   const typeList = ['Spa', 'White', 'Red', 'Rose'];
 
-  const top10List = distances.map((item, index) => {
-    const jan = item.JAN;
-    const currentRating = userRatings[jan] || 0;
-    const price = item.希望小売価格 !== null ? `${parseInt(item.希望小売価格).toLocaleString()} 円` : "価格未設定";
-    return (
-      <div key={jan} className="top10-item">
-        <strong>{`${index + 1}.`} {item['商品名']} ({item.Type}) {price}</strong>
-        <div style={{ display: 'flex', alignItems: 'center', marginTop: '5px' }}>
-          <select value={currentRating} onChange={(e) => handleRatingChange(jan, parseInt(e.target.value))}>
+  return (
+    <div style={{ padding: '10px' }}>
+      <h2>SAKELAVO</h2>
+      <div style={{ display: 'flex', gap: '10px', marginBottom: '10px' }}>
+        <button onClick={() => setZoomLevel(prev => Math.min(prev + 1.0, 10))}>＋</button>
+        <button onClick={() => setZoomLevel(prev => Math.max(prev - 1.0, 0.2))}>−</button>
+        <button onClick={() => setScanning(true)}>📷 JANスキャン</button>
+      </div>
+
+      {scanning && (
+        <div style={{ maxWidth: '400px', marginBottom: '10px' }}>
+          <QrReader
+            delay={300}
+            onError={() => alert("カメラアクセスに失敗しました")}
+            onScan={(result) => {
+              if (result) {
+                const match = data.find(d => String(d.JAN).trim() === result.trim());
+                if (match) {
+                  setTarget({ x: match.BodyAxis, y: match.SweetAxis });
+                  setSliderPc1((match.BodyAxis + 7.5) * (100 / 20));
+                  setSliderPc2((match.SweetAxis + 7.5) * (100 / 20));
+                } else {
+                  alert(`「${result}」に該当するワインが見つかりません`);
+                }
+                setScanning(false);
+              }
+            }}
+            style={{ width: '100%' }}
+          />
+        </div>
+      )}
+
+      <label>コク（軽やか〜濃厚）</label>
+      <input type="range" min="0" max="100" value={sliderPc1} onChange={e => setSliderPc1(parseInt(e.target.value))} style={{ width: '100%' }} />
+
+      <label>甘さ（控えめ〜強め）</label>
+      <input type="range" min="0" max="100" value={sliderPc2} onChange={e => setSliderPc2(parseInt(e.target.value))} style={{ width: '100%' }} />
+
+      <Plot
+        useResizeHandler
+        style={{ width: '100%', height: '400px' }}
+        data={[
+          ...typeList.map(type => ({
+            x: data.filter(d => d.Type === type).map(d => d.BodyAxis),
+            y: data.filter(d => d.Type === type).map(d => d.SweetAxis),
+            mode: 'markers',
+            type: 'scatter',
+            marker: { size: 6, color: typeColor[type] },
+            name: type
+          })),
+          {
+            x: [target.x], y: [target.y],
+            mode: 'markers',
+            type: 'scatter',
+            marker: { size: 20, color: 'green', symbol: 'x' },
+            name: 'あなたの好み',
+          },
+          {
+            x: distances.map(d => d.BodyAxis),
+            y: distances.map(d => d.SweetAxis),
+            text: distances.map((_, i) => '❶❷❸❹❺❻❼❽❾❿'[i] || `${i + 1}`),
+            mode: 'markers+text',
+            type: 'scatter',
+            marker: { size: 10, color: 'white' },
+            textfont: { color: 'black', size: 12 },
+            textposition: 'middle center',
+            name: 'TOP10', hoverinfo: 'text',
+          }
+        ]}
+        layout={{
+          xaxis: { showticklabels: false, zeroline: false },
+          yaxis: { showticklabels: false, zeroline: false },
+          margin: { l: 30, r: 30, t: 30, b: 30 },
+          dragmode: 'pan',
+          showlegend: true
+        }}
+        config={{ responsive: true, scrollZoom: true, displayModeBar: false }}
+      />
+
+      <h3>あなたの好みに寄り添うワイン</h3>
+      {distances.map((item, index) => (
+        <div key={item.JAN}>
+          <strong>{index + 1}. {item.商品名} ({item.Type}) {item.希望小売価格 ? `${item.希望小売価格.toLocaleString()} 円` : '価格未設定'}</strong>
+          <select value={userRatings[item.JAN] || 0} onChange={(e) => handleRatingChange(item.JAN, parseInt(e.target.value))}>
             {ratingOptions.map((label, idx) => (
               <option key={idx} value={idx}>{label}</option>
             ))}
           </select>
         </div>
-      </div>
-    );
-  });
-
-  const x_range = [
-    target.x - ((x_max - x_min) / 2) * zoomFactor,
-    target.x + ((x_max - x_min) / 2) * zoomFactor
-  ];
-  const y_range = [
-    target.y - ((y_max - y_min) / 2) * zoomFactor,
-    target.y + ((y_max - y_min) / 2) * zoomFactor
-  ];
-
-  const handlePlotClick = (event) => {
-    if (event?.points?.length > 0) {
-      const pt = event.points[0];
-      setTarget({ x: pt.x, y: pt.y });
-    }
-  };
-
-  const handleScan = async () => {
-    const codeReader = new BrowserMultiFormatReader();
-    try {
-      const result = await codeReader.decodeOnceFromVideoDevice(undefined, 'reader');
-      const decodedText = result.getText();
-      const match = data.find(d => String(d.JAN).trim() === decodedText.trim());
-      if (match) {
-        setTarget({ x: match.BodyAxis, y: match.SweetAxis });
-      } else {
-        alert(`「${decodedText}」に該当するワインが見つかりません`);
-      }
-      codeReader.reset();
-    } catch (error) {
-      console.error('バーコード読み取り失敗:', error);
-    }
-  };
-
-  return (
-    <div style={{ padding: '10px' }}>
-      <h2>SAKELAVO</h2>
-
-      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginBottom: '10px' }}>
-        <button onClick={() => setZoomLevel(prev => Math.min(prev + 1.0, 10))}>＋</button>
-        <button onClick={() => setZoomLevel(prev => Math.max(prev - 1.0, 0.2))}>−</button>
-        <button onClick={handleScan}>📷 JANスキャン</button>
-      </div>
-
-      <video id="reader" width="100%" style={{ maxHeight: '300px', marginBottom: '10px' }}></video>
-
-      <div className="plot-container">
-        <Plot
-          useResizeHandler={true}
-          style={{ width: 'calc(100vw - 20px)', height: '100%' }}
-          key={JSON.stringify(userRatings) + zoomLevel + JSON.stringify(target)}
-          onClick={handlePlotClick}
-          data={[
-            ...typeList.map(type => ({
-              x: data.filter(d => d.Type === type).map(d => d.BodyAxis),
-              y: data.filter(d => d.Type === type).map(d => d.SweetAxis),
-              text: data.filter(d => d.Type === type).map(d => d["商品名"]),
-              hoverinfo: 'text+name',
-              mode: 'markers',
-              type: 'scatter',
-              marker: { size: 5, color: typeColor[type] },
-              name: type,
-            })),
-            ...Object.entries(userRatings).filter(([jan, rating]) => rating > 0).map(([jan, rating]) => {
-              const wine = data.find(d => String(d.JAN).trim() === String(jan).trim());
-              if (!wine) return null;
-              return {
-                x: [wine.BodyAxis], y: [wine.SweetAxis],
-                text: [""],
-                mode: 'markers+text', type: 'scatter',
-                marker: {
-                  size: rating * 6 + 8, color: 'orange', opacity: 0.8,
-                  line: { color: 'green', width: 1.5 },
-                },
-                textposition: 'bottom center', name: '評価バブル', showlegend: false,
-                hoverinfo: 'skip',
-              };
-            }).filter(Boolean),
-            {
-              x: [target.x], y: [target.y],
-              mode: 'markers', type: 'scatter',
-              marker: { size: 20, color: 'green', symbol: 'x' },
-              name: 'あなたの好み', hoverinfo: 'skip',
-            },
-            {
-              x: distances.map(d => d.BodyAxis),
-              y: distances.map(d => d.SweetAxis),
-              text: distances.map((d, i) => '❶❷❸❹❺❻❼❽❾❿'[i] || `${i + 1}`),
-              mode: 'markers+text', type: 'scatter',
-              marker: { size: 10, color: 'white' },
-              textfont: { color: 'black', size: 12 },
-              textposition: 'middle center',
-              name: 'TOP10', showlegend: false,
-              hoverinfo: 'text',
-            },
-          ]}
-          layout={{
-            margin: { l: 30, r: 30, t: 30, b: 30 },
-            dragmode: 'pan',
-            xaxis: {
-              range: x_range, showticklabels: false, zeroline: false,
-              showgrid: true, gridcolor: 'lightgray', gridwidth: 1,
-              scaleanchor: 'y', scaleratio: 1,
-              mirror: true, linecolor: 'black', linewidth: 2
-            },
-            yaxis: {
-              range: y_range, showticklabels: false, zeroline: false,
-              showgrid: true, gridcolor: 'lightgray', gridwidth: 1,
-              scaleanchor: 'x', scaleratio: 1,
-              mirror: true, linecolor: 'black', linewidth: 2
-            },
-            legend: {
-              orientation: 'h', x: 0.5, y: -0.25, xanchor: 'center', yanchor: 'top'
-            }
-          }}
-          config={{ responsive: true, scrollZoom: true, displayModeBar: false }}
-        />
-      </div>
-
-      {top10List}
+      ))}
     </div>
   );
 }
