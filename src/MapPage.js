@@ -1,12 +1,13 @@
-// src/MapPage.js
 import React, { useState, useEffect } from 'react';
 import Plot from 'react-plotly.js';
+import { BrowserMultiFormatReader } from '@zxing/browser';
 
 function MapPage() {
   const [data, setData] = useState([]);
   const [userRatings, setUserRatings] = useState({});
   const [zoomLevel, setZoomLevel] = useState(2.0);
   const [target, setTarget] = useState({ x: 0, y: 0 });
+
   const zoomFactor = 1 / zoomLevel;
 
   useEffect(() => {
@@ -14,12 +15,6 @@ function MapPage() {
     setTimeout(handleResize, 300);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
-
-  const ratingOptions = ["未評価", "★", "★★", "★★★", "★★★★", "★★★★★"];
-
-  const handleRatingChange = (jan, rating) => {
-    setUserRatings(prev => ({ ...prev, [jan]: rating }));
-  };
 
   useEffect(() => {
     Promise.all([
@@ -49,6 +44,12 @@ function MapPage() {
       setData(merged);
     });
   }, []);
+
+  const ratingOptions = ["未評価", "★", "★★", "★★★", "★★★★", "★★★★★"];
+
+  const handleRatingChange = (jan, rating) => {
+    setUserRatings(prev => ({ ...prev, [jan]: rating }));
+  };
 
   const xValues = data.map(d => d.BodyAxis);
   const yValues = data.map(d => d.SweetAxis);
@@ -88,39 +89,33 @@ function MapPage() {
     target.x - ((x_max - x_min) / 2) * zoomFactor,
     target.x + ((x_max - x_min) / 2) * zoomFactor
   ];
-
   const y_range = [
     target.y - ((y_max - y_min) / 2) * zoomFactor,
     target.y + ((y_max - y_min) / 2) * zoomFactor
   ];
 
   const handlePlotClick = (event) => {
-    if (event && event.points && event.points.length > 0) {
+    if (event?.points?.length > 0) {
       const pt = event.points[0];
       setTarget({ x: pt.x, y: pt.y });
     }
   };
 
   const handleScan = async () => {
-    if (typeof window === 'undefined') return;
-
-    const { Html5QrcodeScanner } = await import('html5-qrcode');
-    const scanner = new Html5QrcodeScanner("reader", { fps: 10, qrbox: 250 }, false);
-
-    scanner.render(
-      (decodedText) => {
-        const match = data.find(d => String(d.JAN).trim() === decodedText.trim());
-        if (match) {
-          setTarget({ x: match.BodyAxis, y: match.SweetAxis });
-        } else {
-          alert(`「${decodedText}」に該当するワインが見つかりません`);
-        }
-        scanner.clear();
-      },
-      (error) => {
-        console.warn("読み取りエラー:", error);
+    const codeReader = new BrowserMultiFormatReader();
+    try {
+      const result = await codeReader.decodeOnceFromVideoDevice(undefined, 'reader');
+      const decodedText = result.getText();
+      const match = data.find(d => String(d.JAN).trim() === decodedText.trim());
+      if (match) {
+        setTarget({ x: match.BodyAxis, y: match.SweetAxis });
+      } else {
+        alert(`「${decodedText}」に該当するワインが見つかりません`);
       }
-    );
+      codeReader.reset();
+    } catch (error) {
+      console.error('バーコード読み取り失敗:', error);
+    }
   };
 
   return (
@@ -133,7 +128,7 @@ function MapPage() {
         <button onClick={handleScan}>📷 JANスキャン</button>
       </div>
 
-      <div id="reader" style={{ width: '100%', marginBottom: '10px' }}></div>
+      <video id="reader" width="100%" style={{ maxHeight: '300px', marginBottom: '10px' }}></video>
 
       <div className="plot-container">
         <Plot
@@ -145,7 +140,7 @@ function MapPage() {
             ...typeList.map(type => ({
               x: data.filter(d => d.Type === type).map(d => d.BodyAxis),
               y: data.filter(d => d.Type === type).map(d => d.SweetAxis),
-              text: data.filter(d => d.Type === type).map(d => `${d["商品名"]}`),
+              text: data.filter(d => d.Type === type).map(d => d["商品名"]),
               hoverinfo: 'text+name',
               mode: 'markers',
               type: 'scatter',
@@ -186,7 +181,8 @@ function MapPage() {
             },
           ]}
           layout={{
-            margin: { l: 30, r: 30, t: 30, b: 30 }, dragmode: 'pan',
+            margin: { l: 30, r: 30, t: 30, b: 30 },
+            dragmode: 'pan',
             xaxis: {
               range: x_range, showticklabels: false, zeroline: false,
               showgrid: true, gridcolor: 'lightgray', gridwidth: 1,
