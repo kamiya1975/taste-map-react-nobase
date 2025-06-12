@@ -1,7 +1,7 @@
 // src/MapPage.js
 import React, { useState, useEffect, useRef } from 'react';
 import Plot from 'react-plotly.js';
-import { QrScanner } from 'react-qr-barcode-scanner';
+import QrReader from 'react-qr-reader';
 
 function MapPage() {
   const [data, setData] = useState([]);
@@ -12,8 +12,6 @@ function MapPage() {
   const [sliderPc2, setSliderPc2] = useState(50);
   const [scanning, setScanning] = useState(false);
   const zoomFactor = 1 / zoomLevel;
-
-  const qrRef = useRef(null);
 
   useEffect(() => {
     const handleResize = () => window.dispatchEvent(new Event('resize'));
@@ -38,18 +36,30 @@ function MapPage() {
           return entry;
         });
       };
+
       const pcaData = parseCSV(pcaText);
       const metaData = parseCSV(metaText);
       const metaMap = Object.fromEntries(metaData.map(d => [String(d.JAN), d]));
       const merged = pcaData.map(d => ({
         ...d,
-        希望小売価格: metaMap[String(d.JAN)]?.希望小売価格 || null,
         商品名: metaMap[String(d.JAN)]?.商品名 || '',
         Type: metaMap[String(d.JAN)]?.Type || '',
+        希望小売価格: metaMap[String(d.JAN)]?.希望小売価格 || null,
       }));
       setData(merged);
     });
   }, []);
+
+  useEffect(() => {
+    const x = (sliderPc1 / 100) * 20 - 7.5;
+    const y = (sliderPc2 / 100) * 20 - 7.5;
+    setTarget({ x, y });
+  }, [sliderPc1, sliderPc2]);
+
+  const ratingOptions = ["未評価", "★", "★★", "★★★", "★★★★", "★★★★★"];
+  const handleRatingChange = (jan, rating) => {
+    setUserRatings(prev => ({ ...prev, [jan]: rating }));
+  };
 
   const xValues = data.map(d => d.BodyAxis);
   const yValues = data.map(d => d.SweetAxis);
@@ -64,42 +74,6 @@ function MapPage() {
     return { ...d, distance: Math.sqrt(dx * dx + dy * dy) };
   }).sort((a, b) => a.distance - b.distance).slice(0, 10);
 
-  const handleSliderChange = (val, axis) => {
-    axis === 'pc1' ? setSliderPc1(val) : setSliderPc2(val);
-    const mappedX = ((val - 50) / 50) * (x_max - x_min) * 0.4;
-    const mappedY = ((sliderPc2 - 50) / 50) * (y_max - y_min) * 0.4;
-    setTarget({ x: axis === 'pc1' ? mappedX : target.x, y: axis === 'pc2' ? mappedY : target.y });
-  };
-
-  const handleScanSuccess = (result) => {
-    if (!result?.text) return;
-    const match = data.find(d => String(d.JAN).trim() === result.text.trim());
-    if (match) {
-      setTarget({ x: match.BodyAxis, y: match.SweetAxis });
-      setSliderPc1(Math.round(((match.BodyAxis / (x_max - x_min)) * 50) + 50));
-      setSliderPc2(Math.round(((match.SweetAxis / (y_max - y_min)) * 50) + 50));
-    } else {
-      alert(`「${result.text}」に該当するワインが見つかりません`);
-    }
-    setScanning(false);
-  };
-
-  const handleScanError = (err) => {
-    console.error(err);
-    setScanning(false);
-    alert('カメラアクセスに失敗しました');
-  };
-
-  const x_range = [
-    target.x - ((x_max - x_min) / 2) * zoomFactor,
-    target.x + ((x_max - x_min) / 2) * zoomFactor
-  ];
-
-  const y_range = [
-    target.y - ((y_max - y_min) / 2) * zoomFactor,
-    target.y + ((y_max - y_min) / 2) * zoomFactor
-  ];
-
   const typeColor = { Spa: 'blue', White: 'gold', Red: 'red', Rose: 'pink' };
   const typeList = ['Spa', 'White', 'Red', 'Rose'];
 
@@ -107,76 +81,78 @@ function MapPage() {
     <div style={{ padding: '10px' }}>
       <h2>SAKELAVO</h2>
       <div style={{ display: 'flex', gap: '10px', marginBottom: '10px' }}>
-        <button onClick={() => setZoomLevel(z => Math.min(z + 1, 10))}>＋</button>
-        <button onClick={() => setZoomLevel(z => Math.max(z - 1, 0.2))}>−</button>
+        <button onClick={() => setZoomLevel(prev => Math.min(prev + 1.0, 10))}>＋</button>
+        <button onClick={() => setZoomLevel(prev => Math.max(prev - 1.0, 0.2))}>−</button>
         <button onClick={() => setScanning(true)}>📷 JANスキャン</button>
       </div>
 
       {scanning && (
-        <div style={{ maxWidth: '100%' }}>
-          <QrScanner
-            ref={qrRef}
-            onResult={handleScanSuccess}
-            onError={handleScanError}
-            constraints={{ facingMode: 'environment' }}
+        <div style={{ maxWidth: '400px', marginBottom: '10px' }}>
+          <QrReader
+            delay={300}
+            onError={() => alert("カメラアクセスに失敗しました")}
+            onScan={(result) => {
+              if (result) {
+                const match = data.find(d => String(d.JAN).trim() === result.trim());
+                if (match) {
+                  setTarget({ x: match.BodyAxis, y: match.SweetAxis });
+                  setSliderPc1((match.BodyAxis + 7.5) * (100 / 20));
+                  setSliderPc2((match.SweetAxis + 7.5) * (100 / 20));
+                } else {
+                  alert(`「${result}」に該当するワインが見つかりません`);
+                }
+                setScanning(false);
+              }
+            }}
             style={{ width: '100%' }}
           />
         </div>
       )}
 
-      <div>
-        <p>コク（軽やか〜濃厚）</p>
-        <input type="range" min="0" max="100" value={sliderPc1} onChange={e => handleSliderChange(Number(e.target.value), 'pc1')} />
-        <p>甘さ（控えめ〜強め）</p>
-        <input type="range" min="0" max="100" value={sliderPc2} onChange={e => handleSliderChange(Number(e.target.value), 'pc2')} />
-      </div>
+      <label>コク（軽やか〜濃厚）</label>
+      <input type="range" min="0" max="100" value={sliderPc1} onChange={e => setSliderPc1(parseInt(e.target.value))} style={{ width: '100%' }} />
+
+      <label>甘さ（控えめ〜強め）</label>
+      <input type="range" min="0" max="100" value={sliderPc2} onChange={e => setSliderPc2(parseInt(e.target.value))} style={{ width: '100%' }} />
 
       <Plot
-        useResizeHandler={true}
-        style={{ width: 'calc(100vw - 20px)', height: '100%' }}
-        key={zoomLevel + JSON.stringify(target)}
+        useResizeHandler
+        style={{ width: '100%', height: '400px' }}
         data={[
           ...typeList.map(type => ({
             x: data.filter(d => d.Type === type).map(d => d.BodyAxis),
             y: data.filter(d => d.Type === type).map(d => d.SweetAxis),
-            mode: 'markers', type: 'scatter',
-            marker: { size: 5, color: typeColor[type] },
+            mode: 'markers',
+            type: 'scatter',
+            marker: { size: 6, color: typeColor[type] },
             name: type
           })),
           {
             x: [target.x], y: [target.y],
-            mode: 'markers', type: 'scatter',
+            mode: 'markers',
+            type: 'scatter',
             marker: { size: 20, color: 'green', symbol: 'x' },
-            name: 'あなたの好み', hoverinfo: 'skip'
+            name: 'あなたの好み',
           },
           {
             x: distances.map(d => d.BodyAxis),
             y: distances.map(d => d.SweetAxis),
-            text: distances.map((_, i) => '❶❷❸❹❺❻❼❽❾❿'[i]),
-            mode: 'markers+text', type: 'scatter',
+            text: distances.map((_, i) => '❶❷❸❹❺❻❼❽❾❿'[i] || `${i + 1}`),
+            mode: 'markers+text',
+            type: 'scatter',
             marker: { size: 10, color: 'white' },
             textfont: { color: 'black', size: 12 },
             textposition: 'middle center',
-            name: 'TOP10', showlegend: false
+            name: 'TOP10',
+            hoverinfo: 'text',
           }
         ]}
         layout={{
+          xaxis: { showticklabels: false, zeroline: false },
+          yaxis: { showticklabels: false, zeroline: false },
           margin: { l: 30, r: 30, t: 30, b: 30 },
-          xaxis: {
-            range: x_range, showticklabels: false, zeroline: false,
-            showgrid: true, gridcolor: 'lightgray', gridwidth: 1,
-            scaleanchor: 'y', scaleratio: 1,
-            mirror: true, linecolor: 'black', linewidth: 2
-          },
-          yaxis: {
-            range: y_range, showticklabels: false, zeroline: false,
-            showgrid: true, gridcolor: 'lightgray', gridwidth: 1,
-            scaleanchor: 'x', scaleratio: 1,
-            mirror: true, linecolor: 'black', linewidth: 2
-          },
-          legend: {
-            orientation: 'h', x: 0.5, y: -0.25, xanchor: 'center', yanchor: 'top'
-          }
+          dragmode: 'pan',
+          showlegend: true
         }}
         config={{ responsive: true, scrollZoom: true, displayModeBar: false }}
       />
@@ -184,7 +160,12 @@ function MapPage() {
       <h3>あなたの好みに寄り添うワイン</h3>
       {distances.map((item, index) => (
         <div key={item.JAN}>
-          <strong>{index + 1}. {item.商品名} ({item.Type}) {item.希望小売価格 ? `${parseInt(item.希望小売価格).toLocaleString()} 円` : '価格未設定'}</strong>
+          <strong>{index + 1}. {item.商品名} ({item.Type}) {item.希望小売価格 ? `${item.希望小売価格.toLocaleString()} 円` : '価格未設定'}</strong>
+          <select value={userRatings[item.JAN] || 0} onChange={(e) => handleRatingChange(item.JAN, parseInt(e.target.value))}>
+            {ratingOptions.map((label, idx) => (
+              <option key={idx} value={idx}>{label}</option>
+            ))}
+          </select>
         </div>
       ))}
     </div>
