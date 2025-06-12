@@ -103,8 +103,8 @@ function MapPage() {
       <h2>SAKELAVO</h2>
 
       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginBottom: '10px' }}>
-        <button onClick={() => setZoomLevel(prev => Math.min(prev + 0.1, 10))}>＋</button>
-        <button onClick={() => setZoomLevel(prev => Math.max(prev - 0.1, 0.2))}>−</button>
+        <button onClick={() => setZoomLevel(prev => Math.min(prev + 1.0, 10))}>＋</button>
+        <button onClick={() => setZoomLevel(prev => Math.max(prev - 1.0, 0.2))}>−</button>
       </div>
 
       <div className="plot-container">
