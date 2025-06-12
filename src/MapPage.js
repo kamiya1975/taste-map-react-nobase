@@ -46,7 +46,7 @@ function MapPage() {
   // TOP10のみ抽出して囲み数字に変換
   const top10 = data.slice(0, 10).map((d, i) => ({
     ...d,
-    rankLabel: `\u278${i + 1}` // ❶〜❿のUnicode文字
+    rankLabel: ['❶','❷','❸','❹','❺','❻','❼','❽','❾','❿'][i]
   }));
 
   return (
