@@ -6,6 +6,7 @@ function MapPage() {
   const [data, setData] = useState([]);
   const [userRatings, setUserRatings] = useState({});
   const [zoomLevel, setZoomLevel] = useState(2.0);
+  const [target, setTarget] = useState({ x: 0, y: 0 });
   const zoomFactor = 1 / zoomLevel;
 
   useEffect(() => {
@@ -53,7 +54,6 @@ function MapPage() {
   const y_min = Math.min(...yValues);
   const y_max = Math.max(...yValues);
 
-  const target = { x: 0, y: 0 };
   const distances = data.map(d => {
     const dx = d.BodyAxis - target.x;
     const dy = d.SweetAxis - target.y;
@@ -84,6 +84,13 @@ function MapPage() {
   const x_range = [x_min, x_max];
   const y_range = [y_min, y_max];
 
+  const handlePlotClick = (event) => {
+    if (event && event.points && event.points.length > 0) {
+      const pt = event.points[0];
+      setTarget({ x: pt.x, y: pt.y });
+    }
+  };
+
   return (
     <div style={{ padding: '10px' }}>
       <h2>あなたの好みに寄り添うワイン</h2>
@@ -97,7 +104,8 @@ function MapPage() {
         <Plot
           useResizeHandler={true}
           style={{ width: 'calc(100vw - 20px)', height: '100%' }}
-          key={JSON.stringify(userRatings) + zoomLevel}
+          key={JSON.stringify(userRatings) + zoomLevel + JSON.stringify(target)}
+          onClick={handlePlotClick}
           data={[
             ...typeList.map(type => ({
               x: data.filter(d => d.Type === type).map(d => d.BodyAxis),
@@ -124,6 +132,12 @@ function MapPage() {
                 hoverinfo: 'skip',
               };
             }).filter(Boolean),
+            {
+              x: [target.x], y: [target.y],
+              mode: 'markers', type: 'scatter',
+              marker: { size: 20, color: 'green', symbol: 'x' },
+              name: 'あなたの好み', hoverinfo: 'skip',
+            },
             {
               x: distances.map(d => d.BodyAxis),
               y: distances.map(d => d.SweetAxis),
