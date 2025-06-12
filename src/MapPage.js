@@ -1,7 +1,7 @@
 // src/MapPage.js
 import React, { useState, useEffect, useRef } from 'react';
 import Plot from 'react-plotly.js';
-import { BrowserMultiFormatReader } from '@zxing/browser';
+import { BrowserMultiFormatReader, BarcodeFormat } from '@zxing/browser';
 
 function MapPage() {
   const [data, setData] = useState([]);
@@ -11,9 +11,9 @@ function MapPage() {
   const [sliderPC1, setSliderPC1] = useState(50);
   const [sliderPC2, setSliderPC2] = useState(50);
   const [scanning, setScanning] = useState(false);
-  const codeReaderRef = useRef(null);
-  const videoRef = useRef(null);
   const zoomFactor = 1 / zoomLevel;
+  const videoRef = useRef(null);
+  const codeReaderRef = useRef(null);
 
   useEffect(() => {
     const handleResize = () => window.dispatchEvent(new Event('resize'));
@@ -109,33 +109,42 @@ function MapPage() {
   const handleScan = async () => {
     if (scanning) return;
     setScanning(true);
-    const codeReader = new BrowserMultiFormatReader();
-    codeReaderRef.current = codeReader;
+
+    const hints = new Map();
+    hints.set(BrowserMultiFormatReader.BARCODE_FORMATS, [
+      BarcodeFormat.EAN_13,
+      BarcodeFormat.EAN_8,
+      BarcodeFormat.CODE_128,
+    ]);
+
+    const reader = new BrowserMultiFormatReader(hints);
+    codeReaderRef.current = reader;
 
     try {
-      const videoInputDevices = await BrowserMultiFormatReader.listVideoInputDevices();
-      const selectedDeviceId = videoInputDevices[0]?.deviceId;
+      const devices = await BrowserMultiFormatReader.listVideoInputDevices();
+      const deviceId = devices[0]?.deviceId;
+      if (!deviceId) throw new Error("No camera available");
 
-      codeReader.decodeOnceFromVideoDevice(selectedDeviceId, videoRef.current).then(result => {
-        const jan = result.getText().trim();
-        const found = data.find(d => String(d.JAN).trim() === jan);
-        if (found) {
-          setTarget({ x: found.BodyAxis, y: found.SweetAxis });
-
-          // 値の位置に合わせてスライダー初期値更新
-          const bodyRatio = (found.BodyAxis - x_min) / (x_max - x_min);
-          const sweetRatio = (found.SweetAxis - y_min) / (y_max - y_min);
-          setSliderPC1(Math.round(bodyRatio * 100));
-          setSliderPC2(Math.round(sweetRatio * 100));
-        } else {
-          alert(`「${jan}」に該当する商品が見つかりませんでした`);
+      await reader.decodeFromVideoDevice(deviceId, videoRef.current, (result, err) => {
+        if (result) {
+          const jan = result.getText().trim();
+          const found = data.find(d => String(d.JAN).trim() === jan);
+          if (found) {
+            setTarget({ x: found.BodyAxis, y: found.SweetAxis });
+            const bodyRatio = (found.BodyAxis - x_min) / (x_max - x_min);
+            const sweetRatio = (found.SweetAxis - y_min) / (y_max - y_min);
+            setSliderPC1(Math.round(bodyRatio * 100));
+            setSliderPC2(Math.round(sweetRatio * 100));
+          } else {
+            alert(`「${jan}」に該当する商品が見つかりません`);
+          }
+          reader.reset();
+          setScanning(false);
         }
-        codeReader.reset();
-        setScanning(false);
       });
-    } catch (err) {
-      console.error(err);
-      alert("カメラの使用ができませんでした");
+    } catch (e) {
+      console.error(e);
+      alert("カメラアクセスに失敗しました");
       setScanning(false);
     }
   };
@@ -143,110 +152,63 @@ function MapPage() {
   return (
     <div style={{ padding: '10px' }}>
       <h2>SAKELAVO</h2>
-
       <div style={{ display: 'flex', gap: '10px', marginBottom: '10px' }}>
-        <button onClick={() => setZoomLevel(prev => Math.min(prev + 1.0, 10))}>＋</button>
-        <button onClick={() => setZoomLevel(prev => Math.max(prev - 1.0, 0.2))}>−</button>
+        <button onClick={() => setZoomLevel(z => Math.min(z + 1.0, 10))}>＋</button>
+        <button onClick={() => setZoomLevel(z => Math.max(z - 1.0, 0.2))}>−</button>
         <button onClick={handleScan}>📷 JANスキャン</button>
       </div>
+      <video ref={videoRef} style={{ width: '100%', maxHeight: 300 }} hidden={!scanning} />
 
-      {scanning && (
-        <div style={{ width: '100%', maxWidth: '480px', marginBottom: '10px' }}>
-          <video ref={videoRef} style={{ width: '100%' }} />
-        </div>
-      )}
-
-      <div style={{ marginBottom: '20px' }}>
+      <div style={{ margin: '20px 0' }}>
         <label>コク（軽やか〜濃厚）</label>
-        <input type="range" min="0" max="100" value={sliderPC1} onChange={(e) => {
-          const val = Number(e.target.value);
-          setSliderPC1(val);
-          const x = x_min + (x_max - x_min) * (val / 100);
-          setTarget(prev => ({ ...prev, x }));
-        }} />
+        <input type="range" min="0" max="100" value={sliderPC1} onChange={(e) => setSliderPC1(Number(e.target.value))} />
       </div>
-
       <div style={{ marginBottom: '20px' }}>
         <label>甘さ（控えめ〜強め）</label>
-        <input type="range" min="0" max="100" value={sliderPC2} onChange={(e) => {
-          const val = Number(e.target.value);
-          setSliderPC2(val);
-          const y = y_min + (y_max - y_min) * (val / 100);
-          setTarget(prev => ({ ...prev, y }));
-        }} />
+        <input type="range" min="0" max="100" value={sliderPC2} onChange={(e) => setSliderPC2(Number(e.target.value))} />
       </div>
 
-      <div className="plot-container">
-        <Plot
-          useResizeHandler={true}
-          style={{ width: 'calc(100vw - 20px)', height: '100%' }}
-          key={JSON.stringify(userRatings) + zoomLevel + JSON.stringify(target)}
-          onClick={handlePlotClick}
-          data={[
-            ...typeList.map(type => ({
-              x: data.filter(d => d.Type === type).map(d => d.BodyAxis),
-              y: data.filter(d => d.Type === type).map(d => d.SweetAxis),
-              text: data.filter(d => d.Type === type).map(d => d["商品名"]),
-              hoverinfo: 'text+name',
-              mode: 'markers',
-              type: 'scatter',
-              marker: { size: 5, color: typeColor[type] },
-              name: type,
-            })),
-            ...Object.entries(userRatings).filter(([jan, rating]) => rating > 0).map(([jan, rating]) => {
-              const wine = data.find(d => String(d.JAN).trim() === String(jan).trim());
-              if (!wine) return null;
-              return {
-                x: [wine.BodyAxis], y: [wine.SweetAxis],
-                text: [""],
-                mode: 'markers+text', type: 'scatter',
-                marker: {
-                  size: rating * 6 + 8, color: 'orange', opacity: 0.8,
-                  line: { color: 'green', width: 1.5 },
-                },
-                textposition: 'bottom center', name: '評価バブル', showlegend: false,
-                hoverinfo: 'skip',
-              };
-            }).filter(Boolean),
-            {
-              x: [target.x], y: [target.y],
-              mode: 'markers', type: 'scatter',
-              marker: { size: 20, color: 'green', symbol: 'x' },
-              name: 'あなたの好み', hoverinfo: 'skip',
-            },
-            {
-              x: distances.map(d => d.BodyAxis),
-              y: distances.map(d => d.SweetAxis),
-              text: distances.map((d, i) => '❶❷❸❹❺❻❼❽❾❿'[i] || `${i + 1}`),
-              mode: 'markers+text', type: 'scatter',
-              marker: { size: 10, color: 'white' },
-              textfont: { color: 'black', size: 12 },
-              textposition: 'middle center',
-              name: 'TOP10', showlegend: false,
-              hoverinfo: 'text',
-            },
-          ]}
-          layout={{
-            margin: { l: 30, r: 30, t: 30, b: 30 }, dragmode: 'pan',
-            xaxis: {
-              range: x_range, showticklabels: false, zeroline: false,
-              showgrid: true, gridcolor: 'lightgray', gridwidth: 1,
-              scaleanchor: 'y', scaleratio: 1,
-              mirror: true, linecolor: 'black', linewidth: 2
-            },
-            yaxis: {
-              range: y_range, showticklabels: false, zeroline: false,
-              showgrid: true, gridcolor: 'lightgray', gridwidth: 1,
-              scaleanchor: 'x', scaleratio: 1,
-              mirror: true, linecolor: 'black', linewidth: 2
-            },
-            legend: {
-              orientation: 'h', x: 0.5, y: -0.25, xanchor: 'center', yanchor: 'top'
-            }
-          }}
-          config={{ responsive: true, scrollZoom: true, displayModeBar: false }}
-        />
-      </div>
+      <Plot
+        useResizeHandler
+        style={{ width: '100%', height: '100%' }}
+        onClick={handlePlotClick}
+        data={[
+          ...typeList.map(type => ({
+            x: data.filter(d => d.Type === type).map(d => d.BodyAxis),
+            y: data.filter(d => d.Type === type).map(d => d.SweetAxis),
+            text: data.filter(d => d.Type === type).map(d => d["商品名"]),
+            mode: 'markers',
+            type: 'scatter',
+            marker: { size: 5, color: typeColor[type] },
+            name: type,
+          })),
+          {
+            x: [target.x], y: [target.y],
+            mode: 'markers', type: 'scatter',
+            marker: { size: 20, color: 'green', symbol: 'x' },
+            name: 'あなたの好み'
+          },
+          {
+            x: distances.map(d => d.BodyAxis),
+            y: distances.map(d => d.SweetAxis),
+            text: distances.map((d, i) => '❶❷❸❹❺❻❼❽❾❿'[i] || `${i + 1}`),
+            mode: 'markers+text', type: 'scatter',
+            marker: { size: 10, color: 'white' },
+            textfont: { color: 'black', size: 12 },
+            textposition: 'middle center',
+            showlegend: false,
+            hoverinfo: 'text',
+          }
+        ]}
+        layout={{
+          margin: { l: 30, r: 30, t: 30, b: 30 },
+          dragmode: 'pan',
+          xaxis: { range: x_range, showgrid: true },
+          yaxis: { range: y_range, showgrid: true },
+          legend: { orientation: 'h', x: 0.5, y: -0.2, xanchor: 'center' }
+        }}
+        config={{ responsive: true, scrollZoom: true, displayModeBar: false }}
+      />
 
       <h2>あなたの好みに寄り添うワイン</h2>
       {top10List}
