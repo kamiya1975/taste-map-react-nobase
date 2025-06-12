@@ -5,7 +5,7 @@ import Plot from 'react-plotly.js';
 function MapPage() {
   const [data, setData] = useState([]);
   const [userRatings, setUserRatings] = useState({});
-  const [zoomLevel, setZoomLevel] = useState(5.0); // ✅ 初期ズーム倍率を強めに設定
+  const [zoomLevel, setZoomLevel] = useState(2.0); // ✅ 初期ズーム倍率を強めに設定
   const [target, setTarget] = useState({ x: 0, y: 0 });
   const zoomFactor = 1 / zoomLevel;
 
@@ -100,7 +100,7 @@ function MapPage() {
 
   return (
     <div style={{ padding: '10px' }}>
-      <h2>あなたの好みに寄り添うワイン</h2>
+      <h2>SAKELAVO</h2>
 
       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginBottom: '10px' }}>
         <button onClick={() => setZoomLevel(prev => Math.min(prev + 0.1, 10))}>＋</button>
